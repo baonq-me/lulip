@@ -30,7 +30,7 @@ ffi.cdef[[
   int gettimeofday(struct timeval* t, void* tzp);
 ]]
 
-module(...)
+--module(...)
 
 local gettimeofday_struct = ffi.new("timeval")
 local function gettimeofday()
@@ -38,10 +38,14 @@ local function gettimeofday()
    return tonumber(gettimeofday_struct.tv_sec) * 1000000 + tonumber(gettimeofday_struct.tv_usec)
 end
 
-local mt = { __index = _M }
+local _M = {}
+
+local mt = {
+    __index = _M
+}
 
 -- new: create new profiler object
-function new(self)
+function _M:new()
    return setmetatable({
  
       -- Time when start() and stop() were called in microseconds
@@ -73,7 +77,7 @@ function new(self)
 end
 
 -- event: called when a line is executed
-function event(self, event, line)
+function _M:event(event, line)
    local now = gettimeofday()
 
    local f = string_sub(debug.getinfo(3).source,2)
@@ -107,17 +111,17 @@ function event(self, event, line)
 end
 
 -- dont: tell the profiler to ignore files that match these patterns
-function dont(self, file)
+function _M:dont(file)
    table_insert(self.ignore, file)
 end
 
 -- maxrows: set the maximum number of rows of output
-function maxrows(self, max)
+function _M:maxrows(max)
    self.rows = max
 end
 
 -- start: begin profiling
-function start(self)
+function _M:start()
    self:dont('lulip.lua')
    self.start_time = gettimeofday()
    self.current_line = nil
@@ -126,7 +130,7 @@ function start(self)
 end
 
 -- stop: end profiling
-function stop(self)
+function _M:stop()
    self.stop_time = gettimeofday()
    debug.sethook()
 end
@@ -135,6 +139,7 @@ end
 local function readfile(file)
    local lines = {}
    local ln = 1
+   print(file)
    for line in io_lines(file) do
       lines[ln] = string_gsub(line, "^%s*(.-)%s*$", "%1")
       ln = ln + 1
@@ -143,15 +148,17 @@ local function readfile(file)
 end
 
 -- dump: dump profile information to the named file
-function dump(self, file)
+function _M:dump(file)
    local t = {}
    for l,d in pairs(self.lines) do
+      print(l, " ==> ", d)
       table_insert(t, {line=l, data=d})
    end
    table_sort(t, function(a,b) return a["data"][2] > b["data"][2] end)
 
    local files = {}
 
+   print(file)
    local f = io_open(file, "w")
    if not f then
       print("Failed to open output file " .. file)
@@ -160,7 +167,7 @@ function dump(self, file)
    f:write([[
 <html>
 <head>
-<script src="https://google-code-prettify.googlecode.com/svn/loader/run_prettify.js">
+<script src="https://cdn.jsdelivr.net/gh/google/code-prettify@master/loader/run_prettify.js">
 </script>
 <style>.code { padding-left: 20px; }</style>
 </head>
@@ -185,6 +192,8 @@ function dump(self, file)
 <td class="code"><code class="prettyprint">%s</code></td></tr>]],
 l, d[1], d[2]/1000, files[d[3]][ln]))
    end
-   f:write('</tbody></table></body></html')
+   f:write('</tbody></table></body></html>')
    f:close()
 end
+
+return _M
